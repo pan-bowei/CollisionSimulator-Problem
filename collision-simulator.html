@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Primary-Selection Failure Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --bg: #0a0e1a;
+    --card: #111827;
+    --card-border: #1e293b;
+    --honest: #3b82f6;
+    --byzantine: #ef4444;
+    --success: #10b981;
+    --collision: #f59e0b;
+    --livelock: #8b5cf6;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --accent: #60a5fa;
+  }
+  
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 20px 16px;
+    min-height: 100vh;
+  }
+  
+  .container { max-width: 820px; margin: 0 auto; }
+  
+  .header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+  .header p {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+  
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  
+  .card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .control-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 6px;
+  }
+  
+  input[type="range"] {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--card-border);
+    border-radius: 3px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+  }
+  .range-byz::-webkit-slider-thumb { background: var(--byzantine); }
+  
+  .scenario-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .scenario-btn {
+    flex: 1;
+    padding: 12px 8px;
+    border-radius: 8px;
+    border: 1.5px solid var(--card-border);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .scenario-btn.active {
+    border-color: var(--accent);
+    background: rgba(96, 165, 250, 0.08);
+  }
+  .scenario-btn .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .scenario-btn.active .label { color: var(--accent); }
+  .scenario-btn .desc {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+  
+  .boundary-info {
+    text-align: center;
+    margin-top: 12px;
+  }
+  .boundary-info .threshold {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .boundary-info .zone {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  
+  .run-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: linear-gradient(135deg, var(--accent), var(--honest));
+    margin-bottom: 16px;
+  }
+  .run-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(96,165,250,0.3); }
+  .run-btn:disabled { background: var(--card-border); cursor: wait; transform: none; box-shadow: none; }
+  
+  .viz-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  
+  .outcome-badge {
+    text-align: center;
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-top: 12px;
+    border: 2px solid;
+    transition: all 0.3s;
+  }
+  .outcome-badge .outcome-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 2px;
+  }
+  .outcome-badge .outcome-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  
+  .explanation {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.8;
+  }
+  
+  .candidate-summary {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .candidate-card {
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid;
+  }
+  .candidate-card .votes {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .candidate-card .status {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  
+  .layer-desc {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.8;
+  }
+  
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .legend-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  
+  .footer {
+    text-align: center;
+    margin-top: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    opacity: 0.5;
+  }
+
+  .step-indicator {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    border: 2px solid var(--card-border);
+    color: var(--text-dim);
+    transition: all 0.3s;
+  }
+  .step-dot.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(96,165,250,0.1);
+  }
+  .step-dot.done {
+    border-color: var(--success);
+    color: var(--success);
+    background: rgba(16,185,129,0.1);
+  }
+  .step-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 12px;
+    padding: 10px;
+    background: rgba(30,41,59,0.5);
+    border-radius: 8px;
+  }
+  .stat-item {
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .multi-run-card { margin-top: 12px; }
+  .multi-run-bar-container {
+    display: flex;
+    height: 28px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .multi-run-segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    transition: width 0.5s;
+  }
+  .multi-run-legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 8px;
+  }
+
+  @media (max-width: 600px) {
+    .controls-grid { grid-template-columns: 1fr; }
+    .viz-grid { grid-template-columns: 1fr; }
+    .scenario-buttons { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>PRIMARY-SELECTION FAILURE</h1>
+    <p>Interactive simulator for reputation-based PBFT view-change vulnerability</p>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="step-indicator" id="stepIndicator">
+    <div>
+      <div class="step-dot" id="step1">1</div>
+      <div class="step-label">Detect</div>
+    </div>
+    <div>
+      <div class="step-dot" id="step2">2</div>
+      <div class="step-label">Select</div>
+    </div>
+    <div>
+      <div class="step-dot" id="step3">3</div>
+      <div class="step-label">Collect</div>
+    </div>
+    <div>
+      <div class="step-dot" id="step4">4</div>
+      <div class="step-label">Result</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <div class="card-title">CONFIGURATION</div>
+    <div class="controls-grid">
+      <div>
+        <label class="control-label" id="labelN">TOTAL REPLICAS (n) = 10</label>
+        <input type="range" min="4" max="25" value="10" id="sliderN">
+      </div>
+      <div>
+        <label class="control-label" id="labelF">BYZANTINE (f) = 1 — f/n = 0.100</label>
+        <input type="range" class="range-byz" min="0" max="3" value="1" id="sliderF">
+      </div>
+    </div>
+
+    <div>
+      <label class="control-label">SCENARIO</label>
+      <div class="scenario-buttons" id="scenarioBtns">
+        <button class="scenario-btn active" data-mode="uniform" onclick="setMode('uniform')">
+          <div class="label">Layer 1: Uniform</div>
+          <div class="desc">Complete reputation divergence</div>
+        </button>
+        <button class="scenario-btn" data-mode="nonuniform" onclick="setMode('nonuniform')">
+          <div class="label">Layer 2: Non-uniform</div>
+          <div class="desc">Honest reputation scores</div>
+        </button>
+        <button class="scenario-btn" data-mode="adversarial" onclick="setMode('adversarial')">
+          <div class="label">Layer 3: Adversarial</div>
+          <div class="desc">Score manipulation attack</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Boundary diagram -->
+    <svg id="boundaryDiagram" width="100%" viewBox="0 0 400 65" style="display:block;margin:0 auto;max-width:400px;">
+    </svg>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-item">
+        <div class="stat-value" style="color:var(--accent)" id="statN">10</div>
+        <div class="stat-label">n (total)</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" style="color:var(--byzantine)" id="statF">1</div>
+        <div class="stat-label">f (Byzantine)</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" style="color:var(--honest)" id="statH">9</div>
+        <div class="stat-label">honest</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" style="color:var(--collision)" id="statT">7</div>
+        <div class="stat-label">threshold T</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statFN" style="color:var(--text-dim)">0.100</div>
+        <div class="stat-label">f/n ratio</div>
+      </div>
+    </div>
+
+    <div class="boundary-info">
+      <div class="zone" id="zoneLabel">⚠ Collision zone (f/n ≤ 1/5)</div>
+    </div>
+  </div>
+
+  <!-- Run button -->
+  <button class="run-btn" id="runBtn" onclick="runSimulation()">▶  RUN VIEW-CHANGE ELECTION</button>
+
+  <!-- Visualization grid -->
+  <div class="viz-grid">
+    <div class="card">
+      <div class="card-title">REPLICA NETWORK</div>
+      <svg id="networkSvg" width="100%" viewBox="0 0 340 240"></svg>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--honest);opacity:0.6"></div>
+          <span class="legend-text" id="legendHonest">Honest (9)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--byzantine);opacity:0.6"></div>
+          <span class="legend-text" id="legendByz">Byzantine (1)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">VOTE DISTRIBUTION</div>
+      <svg id="voteSvg" width="100%" viewBox="0 0 340 240"></svg>
+    </div>
+  </div>
+
+  <!-- Outcome badge -->
+  <div class="outcome-badge" id="outcomeBadge" style="background:rgba(148,163,184,0.05);border-color:rgba(148,163,184,0.2);">
+    <div class="outcome-label" style="color:var(--text-dim)">WAITING</div>
+    <div class="outcome-desc">Configure parameters and run simulation</div>
+  </div>
+
+  <!-- Explanation -->
+  <div class="card" id="explanationCard" style="display:none;">
+    <div class="card-title">WHAT HAPPENED</div>
+    <div class="explanation" id="explanationText"></div>
+    <div class="candidate-summary" id="candidateSummary"></div>
+  </div>
+
+  <!-- Multi-run results -->
+  <div class="card multi-run-card">
+    <div class="card-title">MULTI-RUN STATISTICS (click Run multiple times)</div>
+    <div class="multi-run-bar-container" id="multiRunBar">
+      <div class="multi-run-segment" style="background:var(--text-dim);width:100%">No data yet</div>
+    </div>
+    <div class="multi-run-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div><span class="legend-text" id="multiSuccess">Success: 0</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--collision)"></div><span class="legend-text" id="multiCollision">Collision: 0</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--livelock)"></div><span class="legend-text" id="multiLivelock">Livelock: 0</span></div>
+    </div>
+  </div>
+
+  <!-- Layer explanation -->
+  <div class="card">
+    <div class="card-title" id="layerTitle">LAYER 1: UNIFORM BASELINE</div>
+    <div class="layer-desc" id="layerDesc">
+      Complete reputation divergence — every candidate appears equally good to each honest replica. 
+      Votes are distributed randomly across all candidates using a multinomial allocation. 
+      This represents the worst-case scenario where partial synchrony has caused all replicas to maintain completely different local reputation views.
+    </div>
+  </div>
+
+  <div class="footer">Primary-Selection Failure Simulator — Prabowo, Wang &amp; Wang</div>
+</div>
+
+<script>
+// ============ STATE ============
+let state = {
+  n: 10,
+  f: 1,
+  mode: 'uniform',
+  result: null,
+  running: false,
+  multiRun: { success: 0, collision: 0, livelock: 0 }
+};
+
+// ============ HELPERS ============
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getThreshold(n) {
+  return Math.floor((2 * (n - 1)) / 3) + 1;
+}
+
+function getMaxF(n) {
+  return Math.floor((n - 1) / 3);
+}
+
+function getFnRatio() {
+  return state.n > 0 ? state.f / state.n : 0;
+}
+
+// ============ UI UPDATES ============
+function updateControls() {
+  const maxF = getMaxF(state.n);
+  const threshold = getThreshold(state.n);
+  const fn = getFnRatio();
+  const honest = state.n - state.f;
+
+  document.getElementById('sliderF').max = maxF;
+  if (state.f > maxF) { state.f = maxF; document.getElementById('sliderF').value = maxF; }
+
+  document.getElementById('labelN').textContent = `TOTAL REPLICAS (n) = ${state.n}`;
+  document.getElementById('labelF').textContent = `BYZANTINE (f) = ${state.f} — f/n = ${fn.toFixed(3)}`;
+
+  document.getElementById('statN').textContent = state.n;
+  document.getElementById('statF').textContent = state.f;
+  document.getElementById('statH').textContent = honest;
+  document.getElementById('statT').textContent = threshold;
+  document.getElementById('statFN').textContent = fn.toFixed(3);
+
+  document.getElementById('legendHonest').textContent = `Honest (${honest})`;
+  document.getElementById('legendByz').textContent = `Byzantine (${state.f})`;
+
+  // Zone label
+  const zoneEl = document.getElementById('zoneLabel');
+  if (fn <= 0.2) {
+    zoneEl.textContent = '⚠ Collision possible (f/n ≤ 1/5)';
+    zoneEl.style.color = 'var(--collision)';
+  } else if (fn <= 1/3) {
+    zoneEl.textContent = '⚠ Livelock-dominated (1/5 < f/n < 1/3)';
+    zoneEl.style.color = 'var(--livelock)';
+  } else {
+    zoneEl.textContent = '✗ Beyond PBFT fault bound';
+    zoneEl.style.color = 'var(--byzantine)';
+  }
+
+  drawBoundary();
+  drawNetwork();
+  drawEmptyVotes();
+}
+
+function drawBoundary() {
+  const svg = document.getElementById('boundaryDiagram');
+  const fn = getFnRatio();
+  const pad = 30;
+  const w = 400;
+  const innerW = w - pad * 2;
+  const maxFn = 0.4;
+
+  const b15 = pad + (0.2 / maxFn) * innerW;
+  const b13 = pad + ((1/3) / maxFn) * innerW;
+  const pos = pad + (fn / maxFn) * innerW;
+
+  svg.innerHTML = `
+    <rect x="${pad}" y="22" width="${b15 - pad}" height="16" rx="4" fill="var(--collision)" opacity="0.15"/>
+    <rect x="${b15}" y="22" width="${b13 - b15}" height="16" rx="4" fill="var(--livelock)" opacity="0.15"/>
+    <rect x="${b13}" y="22" width="${pad + innerW - b13}" height="16" rx="4" fill="var(--byzantine)" opacity="0.1"/>
+    
+    <line x1="${pad}" y1="40" x2="${pad + innerW}" y2="40" stroke="var(--card-border)" stroke-width="1"/>
+    
+    <line x1="${b15}" y1="18" x2="${b15}" y2="44" stroke="var(--collision)" stroke-width="1.5" stroke-dasharray="3 2"/>
+    <text x="${b15}" y="56" text-anchor="middle" fill="var(--collision)" font-size="10" font-family="JetBrains Mono,monospace" font-weight="600">1/5</text>
+    
+    <line x1="${b13}" y1="18" x2="${b13}" y2="44" stroke="var(--byzantine)" stroke-width="1.5" stroke-dasharray="3 2"/>
+    <text x="${b13}" y="56" text-anchor="middle" fill="var(--byzantine)" font-size="10" font-family="JetBrains Mono,monospace" font-weight="600">1/3</text>
+    
+    <text x="${pad}" y="14" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono,monospace">0</text>
+    <text x="${(b15 + pad) / 2}" y="14" text-anchor="middle" fill="var(--collision)" font-size="8" font-family="JetBrains Mono,monospace" opacity="0.7">Collision</text>
+    <text x="${(b13 + b15) / 2}" y="14" text-anchor="middle" fill="var(--livelock)" font-size="8" font-family="JetBrains Mono,monospace" opacity="0.7">Livelock</text>
+    <text x="${pad + innerW}" y="14" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono,monospace" text-anchor="end">f/n</text>
+    
+    <polygon points="${pos - 6},20 ${pos + 6},20 ${pos},27" fill="var(--accent)"/>
+    <text x="${pos}" y="14" text-anchor="middle" fill="var(--accent)" font-size="9" font-family="JetBrains Mono,monospace" font-weight="700">${fn.toFixed(2)}</text>
+  `;
+}
+
+function getReplicaPositions(n) {
+  const positions = [];
+  const cx = 170, cy = 120, rx = 130, ry = 90;
+  for (let i = 0; i < n; i++) {
+    const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+    positions.push({ x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) });
+  }
+  return positions;
+}
+
+const VOTE_COLORS = { A: '#3b82f6', B: '#f59e0b', C: '#8b5cf6', D: '#10b981', E: '#ec4899' };
+
+function drawReplicaNode(x, y, id, isByz, vote, highlight) {
+  const color = isByz ? 'var(--byzantine)' : 'var(--honest)';
+  const fillColor = isByz ? '#ef4444' : '#3b82f6';
+  const voteColor = vote ? (VOTE_COLORS[vote] || '#64748b') : null;
+  const label = isByz ? 'B' : 'H';
+
+  let html = '';
+  if (highlight) {
+    html += `<circle cx="${x}" cy="${y}" r="25" fill="none" stroke="${highlight}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="0 ${x} ${y}" to="360 ${x} ${y}" dur="4s" repeatCount="indefinite"/>
+    </circle>`;
+  }
+  html += `<circle cx="${x}" cy="${y}" r="19" fill="${fillColor}" opacity="0.12" stroke="${fillColor}" stroke-width="1.5"/>`;
+  html += `<text x="${x}" y="${y - 3}" text-anchor="middle" fill="${fillColor}" font-size="11" font-weight="700" font-family="JetBrains Mono,monospace">${label}${id}</text>`;
+  
+  if (vote) {
+    const vc = vote === 'none' ? '#64748b' : (VOTE_COLORS[vote] || '#64748b');
+    html += `<rect x="${x - 11}" y="${y + 6}" width="22" height="14" rx="3" fill="${vc}" opacity="0.85"/>`;
+    html += `<text x="${x}" y="${y + 16}" text-anchor="middle" fill="#fff" font-size="9" font-weight="600" font-family="JetBrains Mono,monospace">${vote === 'none' ? '—' : vote}</text>`;
+  }
+  return html;
+}
+
+function drawNetwork() {
+  const svg = document.getElementById('networkSvg');
+  const positions = getReplicaPositions(state.n);
+  let html = '';
+
+  if (state.result) {
+    state.result.replicas.forEach((rep, i) => {
+      const p = positions[i];
+      const hl = rep.vote && rep.vote !== 'none' ? VOTE_COLORS[rep.vote] : null;
+      html += drawReplicaNode(p.x, p.y, i, rep.isByzantine, rep.vote, hl);
+    });
+  } else {
+    positions.forEach((p, i) => {
+      html += drawReplicaNode(p.x, p.y, i, i >= state.n - state.f, null, null);
+    });
+  }
+  svg.innerHTML = html;
+}
+
+function drawEmptyVotes() {
+  const svg = document.getElementById('voteSvg');
+  svg.innerHTML = `<text x="170" y="125" text-anchor="middle" fill="var(--text-dim)" font-size="12" font-family="JetBrains Mono,monospace">Run simulation to see votes</text>`;
+}
+
+function drawVotes() {
+  if (!state.result) return;
+  const svg = document.getElementById('voteSvg');
+  const { candidates, votes, threshold } = state.result;
+  const n = state.n;
+  const maxVotes = n;
+
+  const barW = Math.min(55, 260 / candidates.length);
+  const gap = (300 - barW * candidates.length) / (candidates.length + 1);
+  const chartTop = 25;
+  const chartH = 175;
+  const chartBottom = chartTop + chartH;
+
+  let html = '';
+
+  // Threshold line
+  const threshY = chartBottom - (threshold / maxVotes) * chartH;
+  html += `<line x1="20" y1="${threshY}" x2="320" y2="${threshY}" stroke="var(--byzantine)" stroke-width="1" stroke-dasharray="5 3" opacity="0.7"/>`;
+  html += `<text x="325" y="${threshY + 4}" fill="var(--byzantine)" font-size="9" font-family="JetBrains Mono,monospace" font-weight="600">T=${threshold}</text>`;
+
+  // Bars
+  candidates.forEach((c, i) => {
+    const x = 20 + gap + i * (barW + gap);
+    const barH = (votes[c] / maxVotes) * chartH;
+    const y = chartBottom - barH;
+    const reached = votes[c] >= threshold;
+    const color = VOTE_COLORS[c] || '#666';
+
+    html += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" fill="${color}" opacity="${reached ? 0.9 : 0.35}"/>`;
+    
+    if (reached) {
+      html += `<rect x="${x - 2}" y="${y - 2}" width="${barW + 4}" height="${barH + 4}" rx="6" fill="none" stroke="${color}" stroke-width="2" opacity="0.6">
+        <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.5s" repeatCount="indefinite"/>
+      </rect>`;
+    }
+
+    html += `<text x="${x + barW/2}" y="${y - 8}" text-anchor="middle" fill="${color}" font-size="14" font-weight="800" font-family="JetBrains Mono,monospace">${votes[c]}</text>`;
+    html += `<text x="${x + barW/2}" y="${chartBottom + 16}" text-anchor="middle" fill="var(--text-dim)" font-size="10" font-family="JetBrains Mono,monospace">${c}</text>`;
+
+    if (reached) {
+      html += `<text x="${x + barW/2}" y="${chartBottom + 28}" text-anchor="middle" fill="var(--success)" font-size="9" font-weight="700" font-family="JetBrains Mono,monospace">✓ T</text>`;
+    }
+  });
+
+  svg.innerHTML = html;
+}
+
+function showOutcome(outcome) {
+  const badge = document.getElementById('outcomeBadge');
+  const configs = {
+    success: { color: 'var(--success)', hex: '#10b981', label: 'SUCCESS', desc: 'One primary elected — view-change succeeds' },
+    collision: { color: 'var(--collision)', hex: '#f59e0b', label: 'COLLISION ⚠', desc: 'Multiple primaries — PBFT safety at risk!' },
+    livelock: { color: 'var(--livelock)', hex: '#8b5cf6', label: 'LIVELOCK ⚠', desc: 'No primary elected — recovery stalls!' },
+  };
+  const c = configs[outcome];
+  badge.style.background = `${c.hex}12`;
+  badge.style.borderColor = `${c.hex}50`;
+  badge.innerHTML = `<div class="outcome-label" style="color:${c.color}">${c.label}</div><div class="outcome-desc">${c.desc}</div>`;
+}
+
+function showExplanation() {
+  const card = document.getElementById('explanationCard');
+  const textEl = document.getElementById('explanationText');
+  const summaryEl = document.getElementById('candidateSummary');
+  const { outcome, candidates, votes, threshold, scores, probs } = state.result;
+
+  card.style.display = 'block';
+
+  let text = '';
+  if (outcome === 'success') {
+    text = `Only <strong>one candidate</strong> reached the threshold of ${threshold} votes. A single primary was elected and the view-change succeeds. `;
+    if (state.mode === 'nonuniform') text += 'Under honest non-uniform reputation, the strongest candidate naturally attracts majority support — this is the expected happy path.';
+    if (state.mode === 'uniform') text += 'Even under uniform random voting, one candidate happened to collect enough support. This becomes less likely as n increases.';
+  } else if (outcome === 'collision') {
+    text = `<strong style="color:var(--collision)">Multiple candidates</strong> each collected ≥${threshold} view-change votes. Different replicas believe different nodes are the primary. `;
+    text += 'Two conflicting PRE-PREPARE messages are broadcast, breaking the single-primary-per-view assumption required for PBFT safety. ';
+    if (state.mode === 'adversarial') text += '<br><br><strong>Byzantine replicas strategically directed their votes to create this split.</strong> This is an engineered collision attack.';
+  } else {
+    text = `<strong style="color:var(--livelock)">No candidate</strong> reached the threshold of ${threshold} votes. The view-change procedure cannot complete — the system is stuck. `;
+    const fn = getFnRatio();
+    if (fn > 0.2) text += `<br><br>At f/n = ${fn.toFixed(3)} (above 1/5), honest support is spread too thin for any single candidate to collect enough votes. This is the <strong>livelock-dominated zone</strong>.`;
+  }
+  textEl.innerHTML = text;
+
+  let cols = Math.min(candidates.length, 4);
+  summaryEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  summaryEl.innerHTML = candidates.map(c => {
+    const color = VOTE_COLORS[c] || '#666';
+    const reached = votes[c] >= threshold;
+    return `<div class="candidate-card" style="background:${color}10;border-color:${color}30">
+      <div class="votes" style="color:${color}">Candidate ${c}: ${votes[c]} votes</div>
+      <div class="status">${reached ? '✓ Reached threshold T' : '✗ Below threshold T'}</div>
+      <div class="status">score: ${scores[c].toFixed(1)} → p = ${probs[c].toFixed(3)}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateMultiRun() {
+  const total = state.multiRun.success + state.multiRun.collision + state.multiRun.livelock;
+  if (total === 0) return;
+
+  const bar = document.getElementById('multiRunBar');
+  const sp = (state.multiRun.success / total * 100).toFixed(1);
+  const cp = (state.multiRun.collision / total * 100).toFixed(1);
+  const lp = (state.multiRun.livelock / total * 100).toFixed(1);
+
+  bar.innerHTML = '';
+  if (state.multiRun.success > 0) bar.innerHTML += `<div class="multi-run-segment" style="background:var(--success);width:${sp}%">${sp}%</div>`;
+  if (state.multiRun.collision > 0) bar.innerHTML += `<div class="multi-run-segment" style="background:var(--collision);width:${cp}%">${cp}%</div>`;
+  if (state.multiRun.livelock > 0) bar.innerHTML += `<div class="multi-run-segment" style="background:var(--livelock);width:${lp}%">${lp}%</div>`;
+
+  document.getElementById('multiSuccess').textContent = `Success: ${state.multiRun.success} (${sp}%)`;
+  document.getElementById('multiCollision').textContent = `Collision: ${state.multiRun.collision} (${cp}%)`;
+  document.getElementById('multiLivelock').textContent = `Livelock: ${state.multiRun.livelock} (${lp}%)`;
+}
+
+function updateLayerDesc() {
+  const title = document.getElementById('layerTitle');
+  const desc = document.getElementById('layerDesc');
+  const descs = {
+    uniform: {
+      title: 'LAYER 1: UNIFORM BASELINE',
+      text: 'Complete reputation divergence — every candidate appears equally good to each honest replica. Votes are distributed randomly across all candidates using a multinomial allocation. This represents the worst-case scenario where partial synchrony has caused all replicas to maintain completely different local reputation views. Byzantine replicas abstain from voting.'
+    },
+    nonuniform: {
+      title: 'LAYER 2: NON-UNIFORM REPUTATION',
+      text: 'Honest replicas share consistent reputation views. The strongest candidate has the highest selection probability and naturally attracts the most support. This usually produces successful primary election — but success is not guaranteed, especially when f/n approaches the 1/5 boundary. Byzantine replicas abstain from voting.'
+    },
+    adversarial: {
+      title: 'LAYER 3: ADVERSARIAL MANIPULATION',
+      text: 'Byzantine replicas deliberately vote for the second-strongest candidate to split honest support. This can turn a successful election into an engineered collision (below f/n = 1/5) or push the system toward livelock (above 1/5). The adversary reshapes the candidate distribution with minimal score perturbation.'
+    }
+  };
+  title.textContent = descs[state.mode].title;
+  desc.textContent = descs[state.mode].text;
+}
+
+function updateSteps(step) {
+  ['step1','step2','step3','step4'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.className = 'step-dot';
+    if (i < step) el.classList.add('done');
+    else if (i === step) el.classList.add('active');
+  });
+}
+
+// ============ SIMULATION ============
+function runSimulation() {
+  if (state.running) return;
+  state.running = true;
+  state.result = null;
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = 'Primary failed — view-change triggered...';
+  document.getElementById('explanationCard').style.display = 'none';
+
+  updateSteps(1);
+
+  const n = state.n;
+  const f = state.f;
+  const threshold = getThreshold(n);
+  const numCandidates = Math.max(2, Math.min(f + 2, n - f));
+  const candidates = [];
+  for (let i = 0; i < numCandidates; i++) candidates.push(String.fromCharCode(65 + i));
+
+  // Scores
+  let scores = {};
+  if (state.mode === 'uniform') {
+    candidates.forEach(c => scores[c] = 1);
+  } else if (state.mode === 'nonuniform') {
+    candidates.forEach((c, i) => scores[c] = Math.max(1, numCandidates * 3 - i * 4));
+  } else {
+    candidates.forEach((c, i) => {
+      if (i === 0) scores[c] = 5;
+      else if (i === 1) scores[c] = 4.5;
+      else scores[c] = Math.max(1, 5 - i * 2.5);
+    });
+  }
+
+  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
+  const probs = {};
+  candidates.forEach(c => probs[c] = scores[c] / totalScore);
+
+  // Vote
+  const votes = {};
+  candidates.forEach(c => votes[c] = 0);
+
+  const replicas = [];
+  for (let i = 0; i < n; i++) {
+    replicas.push({ id: i, isByzantine: i >= n - f, vote: null });
+  }
+
+  // Honest votes
+  const honestIndices = [];
+  const byzIndices = [];
+  replicas.forEach((r, i) => { if (r.isByzantine) byzIndices.push(i); else honestIndices.push(i); });
+
+  shuffle(honestIndices).forEach(idx => {
+    let rand = Math.random();
+    let cumulative = 0;
+    let chosen = candidates[0];
+    for (const c of candidates) {
+      cumulative += probs[c];
+      if (rand < cumulative) { chosen = c; break; }
+    }
+    replicas[idx].vote = chosen;
+    votes[chosen]++;
+  });
+
+  // Byzantine votes
+  byzIndices.forEach(idx => {
+    if (state.mode === 'adversarial' && candidates.length > 1) {
+      replicas[idx].vote = candidates[1];
+      votes[candidates[1]]++;
+    } else {
+      replicas[idx].vote = 'none';
+    }
+  });
+
+  const reached = candidates.filter(c => votes[c] >= threshold);
+  let outcome;
+  if (reached.length === 1) outcome = 'success';
+  else if (reached.length > 1) outcome = 'collision';
+  else outcome = 'livelock';
+
+  // Animate steps
+  setTimeout(() => {
+    btn.textContent = 'Replicas selecting candidates...';
+    updateSteps(2);
+
+    setTimeout(() => {
+      btn.textContent = 'Checking threshold T = 2f+1...';
+      updateSteps(3);
+
+      setTimeout(() => {
+        state.result = { replicas, candidates, votes, threshold, outcome, scores, probs };
+        state.multiRun[outcome]++;
+        state.running = false;
+
+        updateSteps(3);
+        drawNetwork();
+        drawVotes();
+        showOutcome(outcome);
+        showExplanation();
+        updateMultiRun();
+
+        btn.disabled = false;
+        btn.textContent = '▶  RUN AGAIN';
+      }, 500);
+    }, 500);
+  }, 500);
+}
+
+// ============ EVENT HANDLERS ============
+document.getElementById('sliderN').addEventListener('input', function() {
+  state.n = +this.value;
+  state.result = null;
+  state.multiRun = { success: 0, collision: 0, livelock: 0 };
+  document.getElementById('explanationCard').style.display = 'none';
+  document.getElementById('multiRunBar').innerHTML = '<div class="multi-run-segment" style="background:var(--text-dim);width:100%">No data yet</div>';
+  document.getElementById('multiSuccess').textContent = 'Success: 0';
+  document.getElementById('multiCollision').textContent = 'Collision: 0';
+  document.getElementById('multiLivelock').textContent = 'Livelock: 0';
+  updateSteps(0);
+  updateControls();
+  document.getElementById('runBtn').textContent = '▶  RUN VIEW-CHANGE ELECTION';
+});
+
+document.getElementById('sliderF').addEventListener('input', function() {
+  state.f = +this.value;
+  state.result = null;
+  state.multiRun = { success: 0, collision: 0, livelock: 0 };
+  document.getElementById('explanationCard').style.display = 'none';
+  document.getElementById('multiRunBar').innerHTML = '<div class="multi-run-segment" style="background:var(--text-dim);width:100%">No data yet</div>';
+  document.getElementById('multiSuccess').textContent = 'Success: 0';
+  document.getElementById('multiCollision').textContent = 'Collision: 0';
+  document.getElementById('multiLivelock').textContent = 'Livelock: 0';
+  updateSteps(0);
+  updateControls();
+  document.getElementById('runBtn').textContent = '▶  RUN VIEW-CHANGE ELECTION';
+});
+
+function setMode(mode) {
+  state.mode = mode;
+  state.result = null;
+  state.multiRun = { success: 0, collision: 0, livelock: 0 };
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  document.getElementById('explanationCard').style.display = 'none';
+  document.getElementById('multiRunBar').innerHTML = '<div class="multi-run-segment" style="background:var(--text-dim);width:100%">No data yet</div>';
+  document.getElementById('multiSuccess').textContent = 'Success: 0';
+  document.getElementById('multiCollision').textContent = 'Collision: 0';
+  document.getElementById('multiLivelock').textContent = 'Livelock: 0';
+  updateSteps(0);
+  updateControls();
+  updateLayerDesc();
+  document.getElementById('runBtn').textContent = '▶  RUN VIEW-CHANGE ELECTION';
+}
+
+// ============ INIT ============
+updateSteps(0);
+updateControls();
+updateLayerDesc();
+</script>
+</body>
+</html>
